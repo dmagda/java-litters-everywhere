@@ -1,5 +1,6 @@
 package com.yugabytedb.example.java.data;
 
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import com.yugabytedb.example.java.data.PizzaOrder.OrderStatus;
@@ -41,6 +43,21 @@ public class PizzaOrdersController {
 
         PizzaOrder order = orderOptional.get();
         order.setStatus(status);
+        order = repository.save(order);
+
+        return ResponseEntity.ok(order);
+    }
+
+    @PutMapping("/changeOrderTime")
+    public ResponseEntity<PizzaOrder> updateOrderTime(@RequestParam("id") Integer id,
+            @RequestParam("orderTime") Timestamp orderTime) {
+
+        Optional<PizzaOrder> orderOptional = repository.findById(id);
+        if (orderOptional.isEmpty())
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        PizzaOrder order = orderOptional.get();
+        order.setOrderTime(orderTime);
         order = repository.save(order);
 
         return ResponseEntity.ok(order);

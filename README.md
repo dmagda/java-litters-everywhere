@@ -191,10 +191,128 @@ The vacuum is a process that traverses through tables and indexes to garbage-col
     select * from heap_page('pizza_order',0,0);
     ```
 
-### Create Index
+### Create Index for Order Time
 
-1. create index for the timestamp
-2. show that a new index record is created for the timestamp change
-3. but if a status is changed the new record will not be created in the index
+Postgres doesn't update an index page in-place as well. However, there are certain cases when a new version of an index is not created.
 
-Create an order with id = 2
+1. Create an index for the `order_time` column:
+    ```sql
+    CREATE INDEX pizza_order_time_idx ON pizza_order(order_time);
+    ```
+
+2. Put the second order in the queue:
+    ```shell
+    curl -i -X POST \
+        --url http://localhost:8080/putNewOrder \
+        --data 'id=2' 
+    ```
+
+3. Look at the index page (there is an index record that points to the record in the table):
+    ```sql
+    select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
+
+    itemoffset | ctid  | htid  | dead 
+    ------------+-------+-------+------
+          1 | (0,1) | (0,1) | f
+    ```
+    TODO explain the columns
+
+4. Check the table page with the order:
+    ```sql
+    select * from heap_page('pizza_order',0,0);
+
+     ctid  | state  |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+--------+--------+----------+------+-----+-----+--------
+    (0,1) | normal | 1097 c |        1 | 0 a  |     |     | (0,1)
+    ```
+
+### Update Order Time
+
+Now, update the order time for the second order and see what happens.
+
+1. Update the order time:
+    ```shell
+    curl -i -X PUT \
+        --url http://localhost:8080/changeOrderTime \
+        --data 'id=2' \
+        --data 'orderTime=2022-09-28 18:10:00' 
+    ```    
+2. Confirm the time is updated and that now you have two versions of the record internally:
+    ```sql
+    select * from pizza_order;
+
+    id | status  |     order_time      
+    ----+---------+---------------------
+    2 | Ordered | 2022-09-28 18:10:00
+
+    select * from heap_page('pizza_order',0,0);
+
+    ctid  | state  |  xmin  | xmin_age |  xmax  | hhu | hot | t_ctid 
+    -------+--------+--------+----------+--------+-----+-----+--------
+    (0,1) | normal | 1097 c |        2 | 1098 c |     |     | (0,2)
+    (0,2) | normal | 1098 c |        1 | 0 a    |     |     | (0,2)
+    ```
+3. Check the index to confirm you have two index records pointing to those two different versions in the table:
+    ```sql
+    select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
+    
+    itemoffset | ctid  | htid  | dead 
+    ------------+-------+-------+------
+            1 | (0,1) | (0,1) | f
+            2 | (0,2) | (0,2) | f
+    ```
+
+### Update Column That is Not Indexed
+
+However, when you update a non-indexed column then Postgres won't create an additional version in the index.
+
+1. Change the second order's status:
+    ```shell
+        curl -i -X PUT \
+        --url http://localhost:8080/changeStatus \
+        --data 'id=2' \
+        --data 'status=Baking'
+    ```
+2. The new version of the record is added to the table:
+    ```shell
+    select * from heap_page('pizza_order',0,0);
+
+    ctid  | state  |  xmin  | xmin_age |  xmax  | hhu | hot | t_ctid 
+    -------+--------+--------+----------+--------+-----+-----+--------
+    (0,1) | normal | 1097 c |        3 | 1098 c |     |     | (0,2)
+    (0,2) | normal | 1098 c |        2 | 1099   | t   |     | (0,3)
+    (0,3) | normal | 1099   |        1 | 0 a    |     | t   | (0,3)
+    (3 rows)
+    ```
+3. But not to the index:
+    ```shell
+    select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
+
+    itemoffset | ctid  | htid  | dead 
+    ------------+-------+-------+------
+            1 | (0,1) | (0,1) | f
+            2 | (0,2) | (0,2) | f
+    ```
+    * The index references the latest version of the record `ctid = (0,2)`
+    * That version of the record has the `hhu` (heap hot update) flag set to `true` meaning that this version was updated only in the table and you need to traverse to `t_ctid = (0,3)` for the next version of the record
+    * Tht version `ctid=(0,3)` has the `hot` (heap only tuple) set to `true` meaning the version was created only in the table and not referenced directly from the index.
+
+### Trigger Vacuum
+
+Finally, execute the vacuum process manually and check the state of the index and table memory. Should look as follows:
+
+```sql
+select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
+ itemoffset | ctid  | htid  | dead 
+------------+-------+-------+------
+          1 | (0,2) | (0,2) | f
+(1 row)
+
+select * from heap_page('pizza_order',0,0);
+ ctid  |     state     |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+-------+---------------+--------+----------+------+-----+-----+--------
+ (0,1) | unused        |        |          |      |     |     | 
+ (0,2) | redirect to 3 |        |          |      |     |     | 
+ (0,3) | normal        | 1099 c |        1 | 0 a  |     | t   | (0,3)
+(3 rows)
+```
