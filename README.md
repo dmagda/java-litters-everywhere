@@ -4,6 +4,29 @@ As explained in [this article](https://dzone.com/articles/how-java-apps-litter-b
 
 This project includes a few exercises that let you witness this in practice.
 
+<!-- vscode-markdown-toc -->
+
+- [How Java Apps Litter Beyond the Heap](#how-java-apps-litter-beyond-the-heap)
+  - [How Java Generates Garbage in PostgreSQL](#how-java-generates-garbage-in-postgresql)
+    - [Start Postgres](#start-postgres)
+    - [Start Application](#start-application)
+    - [Enable Pageinspect Extension](#enable-pageinspect-extension)
+    - [Put First Pizza Order](#put-first-pizza-order)
+    - [Change Order Status](#change-order-status)
+    - [Delete Order](#delete-order)
+    - [Trigger Vacuum](#trigger-vacuum)
+    - [Create Index for Order Time](#create-index-for-order-time)
+    - [Update Order Time](#update-order-time)
+    - [Update Column That is Not Indexed](#update-column-that-is-not-indexed)
+    - [Trigger Vacuum](#trigger-vacuum-1)
+
+
+<!-- vscode-markdown-toc-config
+    numbering=false
+    autoSave=true
+    /vscode-markdown-toc-config -->
+<!-- /vscode-markdown-toc -->
+
 ## How Java Generates Garbage in PostgreSQL
 
 This project includes a standard Spring Boot Java application that works with Postgres. While the application executes, it will insert, update and delete records in the database. This is what every app usually does. However, in Postgres, an update and delete don't delete an existing record right away... Let's explore what happens in reality.
@@ -42,7 +65,7 @@ Launch an application that creates the `pizza_orders` table for our future exper
     \d+ pizza_order
     ```
 
-### Enable PageInspect Module
+### Enable Pageinspect Extension
 
 1. In your psql session, enable the `pageinspect` extension for Postgres:
     ```sql
