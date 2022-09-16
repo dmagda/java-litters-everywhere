@@ -112,10 +112,9 @@ Launch an application that creates the `pizza_orders` table for our future exper
     ```sql
     select * from heap_page('pizza_order',0,0);
 
-    #The output might be as follows
-     ctid  | state  |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
-    -------+--------+--------+----------+------+-----+-----+--------
-    (0,1) | normal | 1074 c |        1 | 0 a  |     |     | (0,1)
+     ctid  | state  | xmin | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+--------+------+----------+------+-----+-----+--------
+    (0,1) | normal | 1102 |        1 | 0 a  |     |     | (0,1)
     ```
     TBD, explain every column
         * `hhu` - heap hot update, the version is referenced from an index, traverse to the next version using ctid ref.
@@ -158,6 +157,14 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
 6. Make sure the `pizza_orders` table now stores 4 versions of the same record:
     ```sql
     select * from heap_page('pizza_order',0,0);
+
+     ctid  | state  |  xmin  | xmin_age |  xmax  | hhu | hot | t_ctid 
+    -------+--------+--------+----------+--------+-----+-----+--------
+    (0,1) | normal | 1102 c |        4 | 1103 c | t   |     | (0,2)
+    (0,2) | normal | 1103 c |        3 | 1104 c | t   | t   | (0,3)
+    (0,3) | normal | 1104 c |        2 | 1105   | t   | t   | (0,4)
+    (0,4) | normal | 1105   |        1 | 0 a    |     | t   | (0,4)
+    (4 rows)
     ```
 ### Delete Order
 
@@ -178,11 +185,11 @@ When you delete a record in Postgres, it's not remove from the table right away.
     select * from heap_page('pizza_order',0,0);
     ```
 
-### Trigger Vacuum
+### Trigger Ordinary Vacuum
 
-The vacuum is a process that traverses through tables and indexes to garbage-collect old versions of the records.
+The vacuum is a process that traverses through tables and indexes to garbage-collect old versions of the records. There are two types of VACUUM in Postgres - the ordinary one that removes the dead/old records freeing up the space for other record and the full vacuum that can defragments the space by moving all live records into space earlier in the file/memory.
 
-1. Trigger VACUUM manually:
+1. Trigger the ordinary VACUUM manually:
     ```sql
     vacuum;
     ```
@@ -299,7 +306,7 @@ However, when you update a non-indexed column then Postgres won't create an addi
 
 ### Trigger Vacuum
 
-Finally, execute the vacuum process manually and check the state of the index and table memory. Should look as follows:
+Finally, execute the ordinary vacuum process manually and check the state of the index and table memory. Should look as follows:
 
 ```sql
 select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
