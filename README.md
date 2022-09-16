@@ -389,18 +389,23 @@ However, when you update a non-indexed column then Postgres won't create an addi
 
 Finally, execute the ordinary vacuum process manually and check the state of the index and table memory. Should look as follows:
 
-```sql
-select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
- itemoffset | ctid  | htid  | dead 
-------------+-------+-------+------
-          1 | (0,2) | (0,2) | f
-(1 row)
+1. Execute vacuum:
+    ```sql
+    vacuum;
+    ```
+2. Take a look at the table and index pages:
+    ```sql
+    select itemoffset,ctid,htid,dead from bt_page_items('pizza_order_time_idx',1);
+    itemoffset | ctid  | htid  | dead 
+    ------------+-------+-------+------
+            1 | (0,2) | (0,2) | f
+    (1 row)
 
-select * from heap_page('pizza_order',0,0);
- ctid  |     state     |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
--------+---------------+--------+----------+------+-----+-----+--------
- (0,1) | unused        |        |          |      |     |     | 
- (0,2) | redirect to 3 |        |          |      |     |     | 
- (0,3) | normal        | 1099 c |        1 | 0 a  |     | t   | (0,3)
-(3 rows)
-```
+    select * from heap_page('pizza_order',0,0);
+    ctid  |     state     |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+---------------+--------+----------+------+-----+-----+--------
+    (0,1) | unused        |        |          |      |     |     | 
+    (0,2) | redirect to 3 |        |          |      |     |     | 
+    (0,3) | normal        | 1099 c |        1 | 0 a  |     | t   | (0,3)
+    (3 rows)
+    ```
