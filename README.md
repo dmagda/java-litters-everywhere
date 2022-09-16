@@ -13,13 +13,13 @@ This project includes a few exercises that let you witness this in practice.
     - [Enable Pageinspect Extension](#enable-pageinspect-extension)
     - [Put First Pizza Order](#put-first-pizza-order)
     - [Change Order Status](#change-order-status)
-    - [Trigger Ordinary Vacuum](#trigger-vacuum)
-    - [Trigger Full Vacuum](#trigger-vacuum)
+    - [Trigger Ordinary Vacuum](#trigger-ordinary-vacuum)
+    - [Trigger Full Vacuum](#trigger-full-vacuum)
     - [Delete Order](#delete-order)
     - [Create Index for Order Time](#create-index-for-order-time)
     - [Update Order Time](#update-order-time)
     - [Update Column That is Not Indexed](#update-column-that-is-not-indexed)
-    - [Trigger Vacuum](#trigger-vacuum-1)
+    - [Trigger Vacuum](#trigger-vacuum)
 
 
 <!-- vscode-markdown-toc-config
