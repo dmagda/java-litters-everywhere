@@ -13,8 +13,9 @@ This project includes a few exercises that let you witness this in practice.
     - [Enable Pageinspect Extension](#enable-pageinspect-extension)
     - [Put First Pizza Order](#put-first-pizza-order)
     - [Change Order Status](#change-order-status)
+    - [Trigger Ordinary Vacuum](#trigger-vacuum)
+    - [Trigger Full Vacuum](#trigger-vacuum)
     - [Delete Order](#delete-order)
-    - [Trigger Vacuum](#trigger-vacuum)
     - [Create Index for Order Time](#create-index-for-order-time)
     - [Update Order Time](#update-order-time)
     - [Update Column That is Not Indexed](#update-column-that-is-not-indexed)
@@ -135,9 +136,9 @@ Launch an application that creates the `pizza_orders` table for our future exper
     ```sql
     select * from heap_page('pizza_order',0,0);
 
-     ctid  | state  | xmin | xmin_age | xmax | hhu | hot | t_ctid 
+    ctid  | state  | xmin | xmin_age | xmax | hhu | hot | t_ctid 
     -------+--------+------+----------+------+-----+-----+--------
-    (0,1) | normal | 1102 |        1 | 0 a  |     |     | (0,1)
+    (0,1) | normal | 1188 |        1 | 0 a  |     |     | (0,1)
     ```
     TBD, explain every column
         * `hhu` - heap hot update, the version is referenced from an index, traverse to the next version using ctid ref.
@@ -189,6 +190,63 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
     (0,4) | normal | 1105   |        1 | 0 a    |     | t   | (0,4)
     (4 rows)
     ```
+
+### Trigger Ordinary Vacuum
+
+The vacuum is a process that traverses through tables and indexes to garbage-collect old versions of the records. There are two types of VACUUM in Postgres - the ordinary one that removes the dead/old records freeing up the space for new data and the full vacuum that can defragments the space by moving all live records into space earlier in the file/memory.
+
+1. Trigger the ordinary VACUUM manually:
+    ```sql
+    vacuum;
+    ```
+2. Make sure there are no record versions left for the first order and their space is available for new data:
+    ```sql
+    select * from heap_page('pizza_order',0,0);
+
+     ctid  |     state     |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+---------------+--------+----------+------+-----+-----+--------
+    (0,1) | redirect to 4 |        |          |      |     |     | 
+    (0,2) | unused        |        |          |      |     |     | 
+    (0,3) | unused        |        |          |      |     |     | 
+    (0,4) | normal        | 1197 c |        1 | 0 a  |     | t   | (0,4)
+    ```
+3. Update the record's order time triggering the creation of a new version of the record:
+    ```shell
+    curl -i -X PUT \
+        --url http://localhost:8080/changeOrderTime \
+        --data 'id=1' \
+        --data 'orderTime=2022-09-26 13:10:00' 
+    ```
+4. Make sure that the new version reused the space earlier in the page:
+    ```sql
+    select * from heap_page('pizza_order',0,0);
+
+     ctid  |     state     |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+---------------+--------+----------+------+-----+-----+--------
+    (0,1) | redirect to 4 |        |          |      |     |     | 
+    (0,2) | normal        | 1198   |        1 | 0 a  |     | t   | (0,2)
+    (0,3) | unused        |        |          |      |     |     | 
+    (0,4) | normal        | 1197 c |        2 | 1198 | t   | t   | (0,2)
+    ```
+    In this example the `(0,2)` space is reused by the new version.
+
+### Trigger Full Vacuum
+
+The full vacuum can defragment the space in memory and on disk. This operation might take a while and block the execution of your app. It's comparable to the stop-the-world pause in Java.
+
+1. Trigger the full VACUUM:
+    ```sql
+    vacuum full;
+    ```
+2. Make sure the old versions of the records are remove and all live records moved to the beginning of the page:
+    ```sql
+    select * from heap_page('pizza_order',0,0);
+
+     ctid  | state  |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+--------+--------+----------+------+-----+-----+--------
+    (0,1) | normal | 1198 f |       71 | 0 a  |     |     | (0,1)
+    (1 row)
+    ```
 ### Delete Order
 
 When you delete a record in Postgres, it's not remove from the table right away. Instead, it's labeled as deleted and will be garbage collected later.
@@ -206,19 +264,19 @@ When you delete a record in Postgres, it's not remove from the table right away.
 3. But you'll see that all of the version of this just-delete order are still in the table:
     ```sql
     select * from heap_page('pizza_order',0,0);
+
+     ctid  | state  |  xmin  | xmin_age | xmax | hhu | hot | t_ctid 
+    -------+--------+--------+----------+------+-----+-----+--------
+    (0,1) | normal | 1198 f |       77 | 1269 |     |     | (0,1)
     ```
-
-### Trigger Ordinary Vacuum
-
-The vacuum is a process that traverses through tables and indexes to garbage-collect old versions of the records. There are two types of VACUUM in Postgres - the ordinary one that removes the dead/old records freeing up the space for other record and the full vacuum that can defragments the space by moving all live records into space earlier in the file/memory.
-
-1. Trigger the ordinary VACUUM manually:
+4. Trigger vacuum to confirm the space is fully reclaimed (because that was the only record left in the page):
     ```sql
     vacuum;
-    ```
-2. Make sure there are no record versions left for the first order:
-    ```sql
+
     select * from heap_page('pizza_order',0,0);
+
+    ERROR:  block number 0 is out of range for relation "pizza_order"
+    CONTEXT:  SQL function "heap_page" statement 1
     ```
 
 ### Create Index for Order Time
