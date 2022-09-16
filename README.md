@@ -1,13 +1,13 @@
 # How Java Apps Litter Beyond the Heap
 
-As explained in [this article](https://dzone.com/articles/how-java-apps-litter-beyond-the-heap) a typical Java application leaves footprints not only in the Java Heap but also generates garbage in a relational database and SSDs.
+As explained in [this article](https://dzone.com/articles/how-java-apps-litter-beyond-the-heap) a typical Java application leaves footprints not only in the Java Heap but also triggers garbage generation in a relational database and on SSDs.
 
 This project includes a few exercises that let you witness this in practice.
 
 <!-- vscode-markdown-toc -->
 
 - [How Java Apps Litter Beyond the Heap](#how-java-apps-litter-beyond-the-heap)
-  - [How Java Generates Garbage in PostgreSQL](#how-java-generates-garbage-in-postgresql)
+  - [PostgreSQL - Records Versioning and Vacuum](#postgresql-records-versioning-and-vacuum)
     - [Start Postgres](#start-postgres)
     - [Start Application](#start-application)
     - [Enable Pageinspect Extension](#enable-pageinspect-extension)
@@ -20,7 +20,10 @@ This project includes a few exercises that let you witness this in practice.
     - [Update Order Time](#update-order-time)
     - [Update Column That is Not Indexed](#update-column-that-is-not-indexed)
     - [Trigger Vacuum](#trigger-vacuum)
-
+- [YugabyteDB - Columns Versioning and Compaction](#yugabytedb-columns-versioning-and-compaction)
+    - [Start YugabyteDB](#start-yugabytedb)
+    - [Start Application](#start-application)
+    - [Process Pizza Order](#process-pizza-order)
 
 <!-- vscode-markdown-toc-config
     numbering=false
@@ -28,7 +31,7 @@ This project includes a few exercises that let you witness this in practice.
     /vscode-markdown-toc-config -->
 <!-- /vscode-markdown-toc -->
 
-## How Java Generates Garbage in PostgreSQL
+##  PostgreSQL - Records Versioning and Vacuum
 
 This project includes a standard Spring Boot Java application that works with Postgres. While the application executes, it will insert, update and delete records in the database. This is what every app usually does. However, in Postgres, an update and delete don't delete an existing record right away... Let's explore what happens in reality.
 
@@ -408,4 +411,114 @@ Finally, execute the ordinary vacuum process manually and check the state of the
     (0,2) | redirect to 3 |        |          |      |     |     | 
     (0,3) | normal        | 1099 c |        1 | 0 a  |     | t   | (0,3)
     (3 rows)
+    ```
+## YugabyteDB - Columns Versioning and Compaction
+
+YugabyteDB is an LSM-tree based database. It uses another approach to keep track of different versions of the columns & records. Same as in Postgres, YugabyteDB stores multiple versions for the sake of MVCC.
+
+### Start YugabyteDB
+
+1. Start a single-node YugabyteDB instance:
+    ```shell
+    rm -r ~/yb_docker_data
+    mkdir ~/yb_docker_data
+
+    docker network create yugabytedb_network
+
+    docker run -d --name yugabytedb_node1 --net yugabytedb_network \
+    -p 7001:7000 -p 9000:9000 -p 5433:5433 \
+    -v ~/yb_docker_data/node1:/home/yugabyte/yb_data --restart unless-stopped \
+    yugabytedb/yugabyte:latest \
+    bin/yugabyted start --listen=yugabytedb_node1 \
+    --base_dir=/home/yugabyte/yb_data --daemon=false
+    ```
+2. Open a psql session with the instance:
+    ```shell
+    psql -h 127.0.0.1 -p 5433 yugabyte -U yugabyte -w
+    ```
+
+### Start Application
+
+1. Open the `src\main\resources\application.properties` file and perform the following changes:
+    ```yaml
+    #Uncomment the YugabyteDB-specific connectivity settings:
+    spring.datasource.url = jdbc:postgresql://127.0.0.1:5433/yugabyte
+    spring.datasource.username = yugabyte
+    spring.datasource.password = yugabyte
+
+    #And disable to Postgres-specific settings
+    # spring.datasource.url = jdbc:postgresql://localhost:5432/postgres
+    # spring.datasource.username = postgres
+    # spring.datasource.password = password
+    ```
+2. Start the app:
+    ```shell
+    mvn spring-boot:run
+    ```
+### Process Pizza Order
+
+1. Add the first order through the app:
+    ```shell
+    curl -i -X POST \
+        --url http://localhost:8080/putNewOrder \
+        --data 'id=3' 
+    ```
+2. In your psql session, use a standard SQL request to confirm the record is in the database:
+    ```sql
+    select * from pizza_order;
+    ```
+3. Update the order status to `Baking`:
+    ```shell
+        curl -i -X PUT \
+        --url http://localhost:8080/changeStatus \
+        --data 'id=3' \
+        --data 'status=Baking'
+    ```
+4. Update the order status one more time to `Delivering`:
+    ```shell
+        curl -i -X PUT \
+        --url http://localhost:8080/changeStatus \
+        --data 'id=3' \
+        --data 'status=Delivering'
+    ```
+
+5. Connect to the YugabyteDB instance container:
+    ```shell
+    docker exec -it yugabytedb_node1 /bin/bash
+    
+    cd bin/
+    ```
+6. Find the `pizza_order` table ID:
+    ```shell
+    yb-admin -master_addresses yugabytedb_node1:7100 list_tables include_table_id | grep pizza_order
+    ```
+7. Manually flush the memtable to disk (thus, creating the SST file):
+    ```shell
+    yb-admin -master_addresses yugabytedb_node1:7100 flush_table ysql.yugabyte pizza_order
+    ```
+8. Look into the SST structure:
+    ```shell
+    ./sst_dump --command=scan --file=/home/yugabyte/yb_data/data/yb-data/tserver/data/rocksdb/table-{PIZZA_ORDER_TABLE_ID}/tablet-{TABLET_ID}/000010.sst --output_format=decoded_regulardb
+
+    #The output might be as follows
+    SubDocKey(DocKey(0xfca0, [3], []), [SystemColumnId(0); HT{ physical: 1663341345811041 }]) -> null; intent doc ht: HT{ physical: 1663341345791024 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341368800661 }]) -> 4629700416936886278; intent doc ht: HT{ physical: 1663341368790540 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341360382537 }]) -> 4611686018427404292; intent doc ht: HT{ physical: 1663341360371027 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341345811041 w: 1 }]) -> 4575657221408440322; intent doc ht: HT{ physical: 1663341345791024 w: 1 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341368800661 w: 1 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341368790540 w: 1 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341360382537 w: 1 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341360371027 w: 1 }
+    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341345811041 w: 2 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341345791024 w: 2 }
+    ```
+    
+    Note, the output shows that YugabyteDB created new versions for `ColumnId(2)` which is `order_time`. Even though we didn't update the column, JPA/Hibernate generates
+    the following SQL query if an Entity is updated via the `repository.save(...)` method.
+    ```sql
+    Hibernate: 
+    update
+        pizza_order 
+    set
+        order_time=?,
+        status=? 
+    where
+        id=?
     ```
