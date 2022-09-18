@@ -7,7 +7,7 @@ This project includes a few exercises that let you witness this in practice.
 <!-- vscode-markdown-toc -->
 
 - [How Java Apps Litter Beyond the Heap](#how-java-apps-litter-beyond-the-heap)
-  - [PostgreSQL - Records Versioning and Vacuum](#postgresql-records-versioning-and-vacuum)
+  - [PostgreSQL - Records Versioning and Vacuum](#postgresql---records-versioning-and-vacuum)
     - [Start Postgres](#start-postgres)
     - [Start Application](#start-application)
     - [Enable Pageinspect Extension](#enable-pageinspect-extension)
@@ -20,9 +20,9 @@ This project includes a few exercises that let you witness this in practice.
     - [Update Order Time](#update-order-time)
     - [Update Column That is Not Indexed](#update-column-that-is-not-indexed)
     - [Trigger Vacuum](#trigger-vacuum)
-- [YugabyteDB - Columns Versioning and Compaction](#yugabytedb-columns-versioning-and-compaction)
+- [YugabyteDB - Columns Versioning and Compaction](#yugabytedb---columns-versioning-and-compaction)
     - [Start YugabyteDB](#start-yugabytedb)
-    - [Start Application](#start-application)
+    - [Start Application](#start-application-1)
     - [Process Pizza Order](#process-pizza-order)
 
 <!-- vscode-markdown-toc-config
