@@ -143,9 +143,13 @@ Launch an application that creates the `pizza_orders` table for our future exper
     -------+--------+------+----------+------+-----+-----+--------
     (0,1) | normal | 1188 |        1 | 0 a  |     |     | (0,1)
     ```
-    TBD, explain every column
+        * `ctid` - physical location of a record within the page (page id and item id)
+        * `state` - state of the record
+        * `xmin` - transactions that insterted the version.
+        * `xmax` - transaction that deleted the version.
         * `hhu` - heap hot update, the version is referenced from an index, traverse to the next version using ctid ref.
         * `hot` - heap only tuple, the version is created only in heap without the index update.
+        * `t_ctid` - location of the latest version (traverse ctid)
 
 ### Change Order Status
 
@@ -306,7 +310,6 @@ Postgres doesn't update an index page in-place as well. However, there are certa
     ------------+-------+-------+------
           1 | (0,1) | (0,1) | f
     ```
-    TODO explain the columns
 
 4. Check the table page with the order:
     ```sql
