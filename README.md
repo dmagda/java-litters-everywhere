@@ -39,16 +39,17 @@ This project includes a standard Spring Boot Java application that works with Po
 
 1. Launch a Postgres instance in a Docker container:
     ```shell
+    rm -R ~/postgresql_data/
     mkdir ~/postgresql_data/
 
-    docker run --name postgresql --net geo-messenger-net \
+    docker run --name postgresql \
         -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password \
         -p 5432:5432 \
         -v ~/postgresql_data/:/var/lib/postgresql/data -d postgres:13.8
     ```
 2. Connect with psql to make sure the database is running:
     ```shell
-    psql -h 127.0.0.1 --username=postgres
+    psql -h 127.0.0.1 -U postgres
     ```
     Use `password` as the password
 
@@ -128,7 +129,7 @@ Launch an application that creates the `pizza_orders` table for our future exper
 1. Add the first order through the app:
     ```shell
     curl -i -X POST \
-        --url http://localhost:8080/putNewOrder \
+        http://localhost:8080/putNewOrder \
         --data 'id=1' 
     ```
 2. In your psql session, use a standard SQL request to confirm the record is in the database:
@@ -158,7 +159,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
 1. Change the order status to `Baking`:
     ```shell
     curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
+        http://localhost:8080/changeStatus \
         --data 'id=1' \
         --data 'status=Baking'
     ```
@@ -170,7 +171,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
 3. Change the status to `Delivering`:
     ```shell
     curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
+        http://localhost:8080/changeStatus \
         --data 'id=1' \
         --data 'status=Delivering'
     ```
@@ -181,7 +182,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
 5. Finally, change the status to `YummyInMyTummy`:
     ```shell
     curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
+        http://localhost:8080/changeStatus \
         --data 'id=1' \
         --data 'status=YummyInMyTummy'
     ```
@@ -220,7 +221,7 @@ The vacuum is a process that traverses through tables and indexes to garbage-col
 3. Update the record's order time triggering the creation of a new version of the record:
     ```shell
     curl -i -X PUT \
-        --url http://localhost:8080/changeOrderTime \
+        http://localhost:8080/changeOrderTime \
         --data 'id=1' \
         --data 'orderTime=2022-09-26 13:10:00' 
     ```
@@ -261,7 +262,7 @@ When you delete a record in Postgres, it's not remove from the table right away.
 1. Delete the first order:
     ```shell
     curl -i -X DELETE \
-        --url http://localhost:8080/deleteOrder \
+        http://localhost:8080/deleteOrder \
         --data 'id=1'
     ```
 2. Confirm the order is no longer visible to the application:
@@ -437,7 +438,7 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     ```
 2. Open a psql session with the instance:
     ```shell
-    psql -h 127.0.0.1 -p 5433 yugabyte -U yugabyte -w
+    psql -h 127.0.0.1 -p 5433 -U yugabyte
     ```
 
 ### Start Application
@@ -463,7 +464,7 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
 1. Add the first order through the app:
     ```shell
     curl -i -X POST \
-        --url http://localhost:8080/putNewOrder \
+        http://localhost:8080/putNewOrder \
         --data 'id=3' 
     ```
 2. In your psql session, use a standard SQL request to confirm the record is in the database:
@@ -473,14 +474,14 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
 3. Update the order status to `Baking`:
     ```shell
         curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
+        http://localhost:8080/changeStatus \
         --data 'id=3' \
         --data 'status=Baking'
     ```
 4. Update the order status one more time to `Delivering`:
     ```shell
         curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
+        http://localhost:8080/changeStatus \
         --data 'id=3' \
         --data 'status=Delivering'
     ```
@@ -524,4 +525,13 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
         status=? 
     where
         id=?
+    ```
+9. Annotate the `PizzaOrder` class with the `@DynamicUpdate` annotation and rerun the test for YugabyteDB. Hiberbate will be updating the `status` column only and the SST files will no longer include duplicate version for the `order_time`:
+    ```shell
+    Sst file format: block-based
+    SubDocKey(DocKey(0xc0c4, [2], []), [SystemColumnId(0); HT{ physical: 1668435236922025 }]) -> null; intent doc ht: HT{ physical: 1668435236902251 }
+    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435249777516 }]) -> 4629700416936886278; intent doc ht: HT{ physical: 1668435249764476 }
+    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435244096768 }]) -> 4611686018427404292; intent doc ht: HT{ physical: 1668435244083115 }
+    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435236922025 w: 1 }]) -> 4575657221408440322; intent doc ht: HT{ physical: 1668435236902251 w: 1 }
+    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(2); HT{ physical: 1668435236922025 w: 2 }]) -> 721732436858000; intent doc ht: HT{ physical: 1668435236902251 w: 2 }
     ```
