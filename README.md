@@ -432,7 +432,7 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     docker run -d --name yugabytedb_node1 --net yugabytedb_network \
     -p 7001:7000 -p 9000:9000 -p 5433:5433 \
     -v ~/yb_docker_data/node1:/home/yugabyte/yb_data --restart unless-stopped \
-    yugabytedb/yugabyte:latest \
+    yugabytedb/yugabyte:2.14.4.0-b26 \
     bin/yugabyted start --listen=yugabytedb_node1 \
     --base_dir=/home/yugabyte/yb_data --daemon=false
     ```
