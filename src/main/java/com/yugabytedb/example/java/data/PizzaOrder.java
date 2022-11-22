@@ -19,7 +19,6 @@ public class PizzaOrder {
     private Integer id;
 
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "post_status_info")
     @Type(type = "order_status")
     private OrderStatus status;
 
