@@ -9,10 +9,12 @@ import javax.persistence.Enumerated;
 import javax.persistence.Id;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.Type;
 import org.hibernate.annotations.TypeDef;
 
 @Entity
+@DynamicUpdate
 @TypeDef(name = "order_status", typeClass = PostgreSQLEnumType.class)
 public class PizzaOrder {
     @Id

@@ -465,7 +465,7 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     ```shell
     curl -i -X POST \
         http://localhost:8080/putNewOrder \
-        --data 'id=3' 
+        --data 'id=1' 
     ```
 2. In your psql session, use a standard SQL request to confirm the record is in the database:
     ```sql
@@ -475,14 +475,14 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     ```shell
         curl -i -X PUT \
         http://localhost:8080/changeStatus \
-        --data 'id=3' \
+        --data 'id=1' \
         --data 'status=Baking'
     ```
 4. Update the order status one more time to `Delivering`:
     ```shell
         curl -i -X PUT \
         http://localhost:8080/changeStatus \
-        --data 'id=3' \
+        --data 'id=1' \
         --data 'status=Delivering'
     ```
 
@@ -505,33 +505,10 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     ./sst_dump --command=scan --file=/home/yugabyte/yb_data/data/yb-data/tserver/data/rocksdb/table-{PIZZA_ORDER_TABLE_ID}/tablet-{TABLET_ID}/000010.sst --output_format=decoded_regulardb
 
     #The output might be as follows
-    SubDocKey(DocKey(0xfca0, [3], []), [SystemColumnId(0); HT{ physical: 1663341345811041 }]) -> null; intent doc ht: HT{ physical: 1663341345791024 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341368800661 }]) -> 4629700416936886278; intent doc ht: HT{ physical: 1663341368790540 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341360382537 }]) -> 4611686018427404292; intent doc ht: HT{ physical: 1663341360371027 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(1); HT{ physical: 1663341345811041 w: 1 }]) -> 4575657221408440322; intent doc ht: HT{ physical: 1663341345791024 w: 1 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341368800661 w: 1 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341368790540 w: 1 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341360382537 w: 1 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341360371027 w: 1 }
-    SubDocKey(DocKey(0xfca0, [3], []), [ColumnId(2); HT{ physical: 1663341345811041 w: 2 }]) -> 716642145747000; intent doc ht: HT{ physical: 1663341345791024 w: 2 }
-    ```
-    
-    Note, the output shows that YugabyteDB created new versions for `ColumnId(2)` which is `order_time`. Even though we didn't update the column, JPA/Hibernate generates
-    the following SQL query if an Entity is updated via the `repository.save(...)` method.
-    ```sql
-    Hibernate: 
-    update
-        pizza_order 
-    set
-        order_time=?,
-        status=? 
-    where
-        id=?
-    ```
-9. Annotate the `PizzaOrder` class with the `@DynamicUpdate` annotation and rerun the test for YugabyteDB. Hiberbate will be updating the `status` column only and the SST files will no longer include duplicate version for the `order_time`:
-    ```shell
     Sst file format: block-based
-    SubDocKey(DocKey(0xc0c4, [2], []), [SystemColumnId(0); HT{ physical: 1668435236922025 }]) -> null; intent doc ht: HT{ physical: 1668435236902251 }
-    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435249777516 }]) -> 4629700416936886278; intent doc ht: HT{ physical: 1668435249764476 }
-    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435244096768 }]) -> 4611686018427404292; intent doc ht: HT{ physical: 1668435244083115 }
-    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(1); HT{ physical: 1668435236922025 w: 1 }]) -> 4575657221408440322; intent doc ht: HT{ physical: 1668435236902251 w: 1 }
-    SubDocKey(DocKey(0xc0c4, [2], []), [ColumnId(2); HT{ physical: 1668435236922025 w: 2 }]) -> 721732436858000; intent doc ht: HT{ physical: 1668435236902251 w: 2 }
+    SubDocKey(DocKey(0x1210, [1], []), [SystemColumnId(0); HT{ physical: 1670964617951372 }]) -> null; intent doc ht: HT{ physical: 1670964617927460 }
+    SubDocKey(DocKey(0x1210, [1], []), [ColumnId(1); HT{ physical: 1670964638701253 }]) -> 4629700416936886278; intent doc ht: HT{ physical: 1670964638692844 }
+    SubDocKey(DocKey(0x1210, [1], []), [ColumnId(1); HT{ physical: 1670964624310711 }]) -> 4611686018427404292; intent doc ht: HT{ physical: 1670964624295329 }
+    SubDocKey(DocKey(0x1210, [1], []), [ColumnId(1); HT{ physical: 1670964617951372 w: 1 }]) -> 4575657221408440322; intent doc ht: HT{ physical: 1670964617927460 w: 1 }
+    SubDocKey(DocKey(0x1210, [1], []), [ColumnId(2); HT{ physical: 1670964638701253 w: 1 }]) -> 724261817884000; intent doc ht: HT{ physical: 1670964638692844 w: 1 }
     ```
