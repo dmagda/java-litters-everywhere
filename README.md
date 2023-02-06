@@ -42,7 +42,7 @@ This project includes a standard Spring Boot Java application that works with Po
     rm -R ~/postgresql_data/
     mkdir ~/postgresql_data/
 
-    docker run --name postgresql \
+    docker run --name postgresql --net custom-network \
         -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password \
         -p 5432:5432 \
         -v ~/postgresql_data/:/var/lib/postgresql/data -d postgres:13.8
@@ -61,11 +61,13 @@ Launch an application that creates the `pizza_orders` table for our future exper
     ```shell
     mvn spring-boot:run
     ```
-2. Open a terminal window and hit the following REST endpoint to confirm the app is running normally:
+2. Install the `httpie` tool: https://httpie.io
+
+3. Open a terminal window and hit the following REST endpoint to confirm the app is running normally:
     ```shell
-    curl -i -X GET http://localhost:8080/ping
+    http localhost:8080/ping
     ```
-3. Open your psql session and confirm the `pizza_orders` table is created:
+4. Open your psql session and confirm the `pizza_orders` table is created:
     ```sql
     \d+ pizza_order
     ```
@@ -128,9 +130,7 @@ Launch an application that creates the `pizza_orders` table for our future exper
 
 1. Add the first order through the app:
     ```shell
-    curl -i -X POST \
-        http://localhost:8080/putNewOrder \
-        --data 'id=1' 
+    http POST localhost:8080/putNewOrder id==1
     ```
 2. In your psql session, use a standard SQL request to confirm the record is in the database:
     ```sql
@@ -158,10 +158,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
 
 1. Change the order status to `Baking`:
     ```shell
-    curl -i -X PUT \
-        http://localhost:8080/changeStatus \
-        --data 'id=1' \
-        --data 'status=Baking'
+    http PUT localhost:8080/changeStatus id==1 status==Baking
     ```
 
 2. Confirm there are two versions of the record in the table:
@@ -170,10 +167,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
     ```
 3. Change the status to `Delivering`:
     ```shell
-    curl -i -X PUT \
-        http://localhost:8080/changeStatus \
-        --data 'id=1' \
-        --data 'status=Delivering'
+    http PUT localhost:8080/changeStatus id==1 status==Delivering
     ```
 4. Confirm there are 3 versions now:
     ```sql
@@ -181,10 +175,7 @@ An update operation in Postgres doesn't change the data in-place. Instead, it wo
     ```
 5. Finally, change the status to `YummyInMyTummy`:
     ```shell
-    curl -i -X PUT \
-        http://localhost:8080/changeStatus \
-        --data 'id=1' \
-        --data 'status=YummyInMyTummy'
+    http PUT localhost:8080/changeStatus id==1 status==YummyInMyTummy
     ```
 6. Make sure the `pizza_orders` table now stores 4 versions of the same record:
     ```sql
@@ -220,10 +211,7 @@ The vacuum is a process that traverses through tables and indexes to garbage-col
     ```
 3. Update the record's order time triggering the creation of a new version of the record:
     ```shell
-    curl -i -X PUT \
-        http://localhost:8080/changeOrderTime \
-        --data 'id=1' \
-        --data 'orderTime=2022-09-26 13:10:00' 
+    http PUT localhost:8080/changeOrderTime id==1 orderTime=='2023-02-08 20:10:00'
     ```
 4. Make sure that the new version reused the space earlier in the page:
     ```sql
@@ -261,9 +249,7 @@ When you delete a record in Postgres, it's not remove from the table right away.
 
 1. Delete the first order:
     ```shell
-    curl -i -X DELETE \
-        http://localhost:8080/deleteOrder \
-        --data 'id=1'
+    http DELETE localhost:8080/deleteOrder id==1
     ```
 2. Confirm the order is no longer visible to the application:
     ```sql
@@ -298,9 +284,7 @@ Postgres doesn't update an index page in-place as well. However, there are certa
 
 2. Put the second order in the queue:
     ```shell
-    curl -i -X POST \
-        --url http://localhost:8080/putNewOrder \
-        --data 'id=2' 
+    http POST localhost:8080/putNewOrder id==2
     ```
 
 3. Look at the index page (there is an index record that points to the record in the table):
@@ -327,10 +311,7 @@ Now, update the order time for the second order and see what happens.
 
 1. Update the order time:
     ```shell
-    curl -i -X PUT \
-        --url http://localhost:8080/changeOrderTime \
-        --data 'id=2' \
-        --data 'orderTime=2022-09-28 18:10:00' 
+    http PUT localhost:8080/changeOrderTime id==2 orderTime=='2023-02-08 20:10:00' 
     ```    
 2. Confirm the time is updated and that now you have two versions of the record internally:
     ```sql
@@ -363,10 +344,7 @@ However, when you update a non-indexed column then Postgres won't create an addi
 
 1. Change the second order's status:
     ```shell
-        curl -i -X PUT \
-        --url http://localhost:8080/changeStatus \
-        --data 'id=2' \
-        --data 'status=Baking'
+    http PUT localhost:8080/changeStatus id==2 status=Baking
     ```
 2. The new version of the record is added to the table:
     ```shell
@@ -427,14 +405,14 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     rm -r ~/yb_docker_data
     mkdir ~/yb_docker_data
 
-    docker network create yugabytedb_network
+    docker network create custom-network
 
-    docker run -d --name yugabytedb_node1 --net yugabytedb_network \
-    -p 7001:7000 -p 9000:9000 -p 5433:5433 \
-    -v ~/yb_docker_data/node1:/home/yugabyte/yb_data --restart unless-stopped \
-    yugabytedb/yugabyte:2.14.4.0-b26 \
-    bin/yugabyted start --listen=yugabytedb_node1 \
-    --base_dir=/home/yugabyte/yb_data --daemon=false
+    docker run -d --name yugabytedb_node1 --net custom-network \
+        -p 7001:7000 -p 9000:9000 -p 5433:5433 \
+        -v ~/yb_docker_data/node1:/home/yugabyte/yb_data --restart unless-stopped \
+        yugabytedb/yugabyte:latest \
+        bin/yugabyted start --listen=yugabytedb_node1 \
+        --base_dir=/home/yugabyte/yb_data --daemon=false
     ```
 2. Open a psql session with the instance:
     ```shell
@@ -463,9 +441,7 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
 
 1. Add the first order through the app:
     ```shell
-    curl -i -X POST \
-        http://localhost:8080/putNewOrder \
-        --data 'id=1' 
+    http POST localhost:8080/putNewOrder id==1
     ```
 2. In your psql session, use a standard SQL request to confirm the record is in the database:
     ```sql
@@ -473,17 +449,11 @@ YugabyteDB is an LSM-tree based database. It uses another approach to keep track
     ```
 3. Update the order status to `Baking`:
     ```shell
-        curl -i -X PUT \
-        http://localhost:8080/changeStatus \
-        --data 'id=1' \
-        --data 'status=Baking'
+    http PUT localhost:8080/changeStatus id==1 status=Baking
     ```
 4. Update the order status one more time to `Delivering`:
     ```shell
-        curl -i -X PUT \
-        http://localhost:8080/changeStatus \
-        --data 'id=1' \
-        --data 'status=Delivering'
+    http PUT localhost:8080/changeStatus id==1 status=Delivering
     ```
 
 5. Connect to the YugabyteDB instance container:
